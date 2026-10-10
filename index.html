@@ -85,7 +85,7 @@ function render(s){
 function esc(v){return String(v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 function say(t,c){$('msg').textContent=t;$('msg').className=c}
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbwuACIq0OM3Q3n2PRQZJpNEMXidnV4Ec_HWC_98iQLPZG9sfuxWm5GpLiAAmWhoB2Kj/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycby95XtcwUfDyNk67k6lrgiBemcOz2UVYU7QRdAQInb6G78eWr72YIWGcoOwAFqQI0jk/exec';
 function submitEntry(){
   if($('sub').disabled) return; // blocks double Enter while saving
   const s=load(), wid=$('wid').value.trim(), loc=$('loc').value.trim(), rsn=$('rsn').value.trim();
