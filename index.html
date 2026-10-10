@@ -1,106 +1,119 @@
 <!DOCTYPE html>
 <html>
 <head>
-<base target="_top">
+
 <style>
   *{box-sizing:border-box;font-family:Roboto,Arial,sans-serif}
-  body{margin:0;background:#f1f3f6}
-  header{background:#2874f0;color:#fff;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;font-size:18px;font-weight:600}
-  header small{display:block;font-size:12px;font-weight:400;opacity:.9}
-  #logout{background:none;border:1px solid #fff;color:#fff;border-radius:2px;padding:6px 10px;cursor:pointer}
-  .card{background:#fff;margin:14px;padding:18px;border-radius:2px;box-shadow:0 1px 3px rgba(0,0,0,.15)}
-  label{display:block;font-size:12px;color:#878787;margin:14px 0 4px}
-  label i{color:#e53935;font-style:normal}
-  input{width:100%;padding:12px;border:1px solid #c2c2c2;border-radius:2px;font-size:16px}
-  input:focus{outline:none;border-color:#2874f0}
-  button.main{width:100%;margin-top:20px;padding:13px;background:#2874f0;color:#fff;border:0;border-radius:2px;font-size:15px;font-weight:600;cursor:pointer}
-  #msg{margin-top:12px;font-size:14px;min-height:18px}
-  .ok{color:#388e3c}.err{color:#e53935}
-  .count{color:#2874f0;font-weight:600}
+  body{margin:0;background:#f1f3f6;color:#212121}
+  header{background:#2874f0;color:#fff;padding:14px 16px;display:flex;justify-content:space-between;align-items:center}
+  header b{font-size:18px;font-style:italic}
+  header small{display:block;font-size:12px;opacity:.9}
+  button.link{background:none;border:1px solid #fff;color:#fff;padding:6px 12px;border-radius:2px;cursor:pointer}
+  .card{background:#fff;max-width:420px;margin:16px auto;padding:20px;border-radius:2px;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+  label{font-size:12px;color:#878787;display:block;margin:14px 0 4px}
+  label i{color:#ff6161;font-style:normal}
+  input{width:100%;padding:10px;font-size:16px;border:0;border-bottom:2px solid #c2c2c2;outline:0;background:#fff}
+  input:focus{border-bottom-color:#2874f0}
+  .btn{width:100%;margin-top:20px;padding:13px;background:#2874f0;color:#fff;border:0;border-radius:2px;font-size:15px;font-weight:600;cursor:pointer}
+  .btn:disabled{background:#9db9ef}
+  #msg{margin-top:10px;font-size:13px;min-height:18px}
+  .ok{color:#388e3c}.err{color:#d32f2f}
+  .row{display:flex;justify-content:space-between;font-size:13px;padding:8px 0;border-bottom:1px solid #eee}
+  h4{margin:0 0 6px;color:#2874f0}
+  .hide{display:none}
 </style>
 </head>
 <body>
-<header><div>WID Scan<small id="who"></small></div><button id="logout" style="display:none">Logout</button></header>
+<header>
+  <div><b>WID Scan</b><small id="who"></small></div>
+  <button class="link hide" id="out" onclick="logout()">Logout</button>
+</header>
 
-<div class="card" id="loginView">
-  <label>Casper ID <i>*</i></label><input id="casper" autocomplete="off">
-  <label>Name <i>*</i></label><input id="name" autocomplete="off">
-  <button class="main" id="loginBtn">Login</button>
+<!-- LOGIN -->
+<div class="card" id="login">
+  <h4>Login</h4>
+  <label>Casper ID <i>*</i></label><input id="cid" autocomplete="off">
+  <label>Name <i>*</i></label><input id="nm" autocomplete="off">
+  <button class="btn" onclick="login()">LOGIN</button>
   <div id="lmsg" class="err"></div>
 </div>
 
-<div class="card" id="scanView" style="display:none">
-  <div>Scanned this shift: <span class="count" id="cnt">0</span></div>
+<!-- SCAN -->
+<div class="card hide" id="scan">
+  <h4>Scan</h4>
   <label>WID <i>*</i></label><input id="wid" autocomplete="off">
   <label>Location <i>*</i></label><input id="loc" autocomplete="off">
-  <label>Reason (optional)</label><input id="reason" autocomplete="off">
-  <button class="main" id="submitBtn">Submit</button>
+  <label>Reason (optional)</label><input id="rsn" autocomplete="off">
+  <button class="btn" id="sub" onclick="submitEntry()">SUBMIT</button>
   <div id="msg"></div>
 </div>
 
+<div class="card hide" id="hist">
+  <h4>This shift: <span id="cnt">0</span></h4>
+  <div id="list"></div>
+</div>
+
 <script>
-const $ = id => document.getElementById(id);
-const KEY = 'wid_session', SHIFT_MS = 12*60*60*1000; // login expires after 12h
-let user = null, count = 0, busy = false;
+const KEY='wid_session', TTL=14*3600*1000;
+let mem=null;
+const $=id=>document.getElementById(id);
+function load(){try{return JSON.parse(localStorage.getItem(KEY))}catch(e){return mem}}
+function save(s){mem=s;try{localStorage.setItem(KEY,JSON.stringify(s))}catch(e){}}
+function clear(){mem=null;try{localStorage.removeItem(KEY)}catch(e){}}
 
-function load(){
-  try{
-    const s = JSON.parse(localStorage.getItem(KEY));
-    if (s && Date.now() - s.t < SHIFT_MS) { user = s; count = s.count||0; }
-    else localStorage.removeItem(KEY);
-  }catch(e){}
+function init(){
+  let s=load();
+  if(s && Date.now()-s.t>TTL){clear();s=null}
+  if(!s){$('login').classList.remove('hide');$('scan').classList.add('hide');$('hist').classList.add('hide');$('out').classList.add('hide');$('who').textContent='';return}
+  $('login').classList.add('hide');$('scan').classList.remove('hide');$('hist').classList.remove('hide');$('out').classList.remove('hide');
+  $('who').textContent=s.name+' ('+s.cid+')';
+  render(s);$('wid').focus();
 }
-function persist(){ try{ localStorage.setItem(KEY, JSON.stringify({...user, count})); }catch(e){} }
-
-function show(){
-  const on = !!user;
-  $('loginView').style.display = on ? 'none':'block';
-  $('scanView').style.display = on ? 'block':'none';
-  $('logout').style.display = on ? 'block':'none';
-  $('who').textContent = on ? user.name + ' · ' + user.casper : '';
-  $('cnt').textContent = count;
-  (on ? $('wid') : $('casper')).focus();
+function login(){
+  const cid=$('cid').value.trim(), name=$('nm').value.trim();
+  if(!cid||!name){$('lmsg').textContent='Casper ID and Name are required';return}
+  save({cid,name,t:Date.now(),log:[]});init();
 }
+function logout(){
+  if(confirm('Logout and end shift?')){clear();$('cid').value=$('nm').value='';init()}
+}
+function render(s){
+  $('cnt').textContent=s.log.length;
+  $('list').innerHTML=s.log.slice().reverse().slice(0,20)
+    .map(e=>`<div class="row"><span>${esc(e.wid)}</span><span>${esc(e.loc)}</span></div>`).join('');
+}
+function esc(v){return String(v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function say(t,c){$('msg').textContent=t;$('msg').className=c}
 
-$('loginBtn').onclick = () => {
-  const c = $('casper').value.trim(), n = $('name').value.trim();
-  if (!c || !n) { $('lmsg').textContent = 'Casper ID and Name required'; return; }
-  user = {casper:c, name:n, t:Date.now()}; count = 0; persist(); show();
-};
-$('name').onkeydown = e => { if (e.key==='Enter') $('loginBtn').click(); };
-$('casper').onkeydown = e => { if (e.key==='Enter') $('name').focus(); };
-
-$('logout').onclick = () => { localStorage.removeItem(KEY); user = null; $('casper').value=$('name').value=''; show(); };
-
-// scanner sends Enter after each scan
-$('wid').onkeydown = e => { if (e.key==='Enter'){ e.preventDefault(); $('wid').value.trim() ? $('loc').focus() : flash('Scan WID','err'); } };
-$('loc').onkeydown = e => { if (e.key==='Enter'){ e.preventDefault(); $('loc').value.trim() ? $('reason').focus() : flash('Scan Location','err'); } };
-$('reason').onkeydown = e => { if (e.key==='Enter'){ e.preventDefault(); submit(); } };
-$('submitBtn').onclick = submit;
-
-function flash(t, c){ const m=$('msg'); m.textContent=t; m.className=c; }
-
-function submit(){
-  if (busy) return;
-  const wid=$('wid').value.trim(), loc=$('loc').value.trim(), reason=$('reason').value.trim();
-  if (!wid) { flash('WID is required','err'); $('wid').focus(); return; }
-  if (!loc) { flash('Location is required','err'); $('loc').focus(); return; }
-  busy = true; $('submitBtn').disabled = true; flash('Saving...','');
-  google.script.run
-    .withSuccessHandler(() => {
-      busy=false; $('submitBtn').disabled=false;
-      count++; persist(); $('cnt').textContent = count;
-      $('wid').value=$('loc').value=$('reason').value='';
-      flash('Saved ✓ '+wid,'ok'); $('wid').focus();
+const API_URL = 'https://script.google.com/macros/s/AKfycbzS1KFg115BQnZ0Sf2dUi96HzGisU2JtZd3UGxxkCh7Dm_DTTMU1k0ACibn2ZPWUNY3/exec';
+function submitEntry(){
+  if($('sub').disabled) return; // blocks double Enter while saving
+  const s=load(), wid=$('wid').value.trim(), loc=$('loc').value.trim(), rsn=$('rsn').value.trim();
+  if(!wid){say('Scan WID','err');$('wid').focus();return}
+  if(!loc){say('Scan Location','err');$('loc').focus();return}
+  $('sub').disabled=true;say('Saving...','');
+  // text/plain avoids a CORS preflight that Apps Script can't answer
+  fetch(API_URL,{method:'POST',body:JSON.stringify({casperId:s.cid,name:s.name,wid,location:loc,reason:rsn})})
+    .then(r=>r.json())
+    .then(r=>{
+      if(!r.ok) throw new Error(r.error);
+      s.log.push({wid,loc});save(s);render(s);
+      $('wid').value=$('loc').value=$('rsn').value='';
+      say('Saved ✔','ok');
     })
-    .withFailureHandler(err => {
-      busy=false; $('submitBtn').disabled=false;
-      flash('Failed: '+err.message,'err');
-    })
-    .saveScan({casper:user.casper, name:user.name, wid, loc, reason});
+    .catch(e=>say('Not saved: '+e.message,'err'))
+    .finally(()=>{$('sub').disabled=false;$('wid').focus()});
 }
 
-load(); show();
+
+// scanner sends Enter: WID → Location → Reason → submit
+function next(from,to){$(from).addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();to()}})}
+next('wid',()=>$('loc').focus());
+next('loc',()=>$('rsn').focus());
+next('rsn',submitEntry);
+next('cid',()=>$('nm').focus());
+next('nm',login);
+init();
 </script>
 </body>
 </html>
