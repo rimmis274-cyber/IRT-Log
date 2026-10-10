@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<style>
+  *{box-sizing:border-box;font-family:Roboto,Arial,sans-serif}
+  body{margin:0;background:#f1f3f6}
+  header{background:#2874f0;color:#fff;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;font-size:18px;font-weight:600}
+  header small{display:block;font-size:12px;font-weight:400;opacity:.9}
+  #logout{background:none;border:1px solid #fff;color:#fff;border-radius:2px;padding:6px 10px;cursor:pointer}
+  .card{background:#fff;margin:14px;padding:18px;border-radius:2px;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+  label{display:block;font-size:12px;color:#878787;margin:14px 0 4px}
+  label i{color:#e53935;font-style:normal}
+  input{width:100%;padding:12px;border:1px solid #c2c2c2;border-radius:2px;font-size:16px}
+  input:focus{outline:none;border-color:#2874f0}
+  button.main{width:100%;margin-top:20px;padding:13px;background:#2874f0;color:#fff;border:0;border-radius:2px;font-size:15px;font-weight:600;cursor:pointer}
+  #msg{margin-top:12px;font-size:14px;min-height:18px}
+  .ok{color:#388e3c}.err{color:#e53935}
+  .count{color:#2874f0;font-weight:600}
+</style>
+</head>
+<body>
+<header><div>WID Scan<small id="who"></small></div><button id="logout" style="display:none">Logout</button></header>
+
+<div class="card" id="loginView">
+  <label>Casper ID <i>*</i></label><input id="casper" autocomplete="off">
+  <label>Name <i>*</i></label><input id="name" autocomplete="off">
+  <button class="main" id="loginBtn">Login</button>
+  <div id="lmsg" class="err"></div>
+</div>
+
+<div class="card" id="scanView" style="display:none">
+  <div>Scanned this shift: <span class="count" id="cnt">0</span></div>
+  <label>WID <i>*</i></label><input id="wid" autocomplete="off">
+  <label>Location <i>*</i></label><input id="loc" autocomplete="off">
+  <label>Reason (optional)</label><input id="reason" autocomplete="off">
+  <button class="main" id="submitBtn">Submit</button>
+  <div id="msg"></div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const KEY = 'wid_session', SHIFT_MS = 12*60*60*1000; // login expires after 12h
+let user = null, count = 0, busy = false;
+
+function load(){
+  try{
+    const s = JSON.parse(localStorage.getItem(KEY));
+    if (s && Date.now() - s.t < SHIFT_MS) { user = s; count = s.count||0; }
+    else localStorage.removeItem(KEY);
+  }catch(e){}
+}
+function persist(){ try{ localStorage.setItem(KEY, JSON.stringify({...user, count})); }catch(e){} }
+
+function show(){
+  const on = !!user;
+  $('loginView').style.display = on ? 'none':'block';
+  $('scanView').style.display = on ? 'block':'none';
+  $('logout').style.display = on ? 'block':'none';
+  $('who').textContent = on ? user.name + ' · ' + user.casper : '';
+  $('cnt').textContent = count;
+  (on ? $('wid') : $('casper')).focus();
+}
+
+$('loginBtn').onclick = () => {
+  const c = $('casper').value.trim(), n = $('name').value.trim();
+  if (!c || !n) { $('lmsg').textContent = 'Casper ID and Name required'; return; }
+  user = {casper:c, name:n, t:Date.now()}; count = 0; persist(); show();
+};
+$('name').onkeydown = e => { if (e.key==='Enter') $('loginBtn').click(); };
+$('casper').onkeydown = e => { if (e.key==='Enter') $('name').focus(); };
+
+$('logout').onclick = () => { localStorage.removeItem(KEY); user = null; $('casper').value=$('name').value=''; show(); };
+
+// scanner sends Enter after each scan
+$('wid').onkeydown = e => { if (e.key==='Enter'){ e.preventDefault(); $('wid').value.trim() ? $('loc').focus() : flash('Scan WID','err'); } };
+$('loc').onkeydown = e => { if (e.key==='Enter'){ e.preventDefault(); $('loc').value.trim() ? $('reason').focus() : flash('Scan Location','err'); } };
+$('reason').onkeydown = e => { if (e.key==='Enter'){ e.preventDefault(); submit(); } };
+$('submitBtn').onclick = submit;
+
+function flash(t, c){ const m=$('msg'); m.textContent=t; m.className=c; }
+
+function submit(){
+  if (busy) return;
+  const wid=$('wid').value.trim(), loc=$('loc').value.trim(), reason=$('reason').value.trim();
+  if (!wid) { flash('WID is required','err'); $('wid').focus(); return; }
+  if (!loc) { flash('Location is required','err'); $('loc').focus(); return; }
+  busy = true; $('submitBtn').disabled = true; flash('Saving...','');
+  google.script.run
+    .withSuccessHandler(() => {
+      busy=false; $('submitBtn').disabled=false;
+      count++; persist(); $('cnt').textContent = count;
+      $('wid').value=$('loc').value=$('reason').value='';
+      flash('Saved ✓ '+wid,'ok'); $('wid').focus();
+    })
+    .withFailureHandler(err => {
+      busy=false; $('submitBtn').disabled=false;
+      flash('Failed: '+err.message,'err');
+    })
+    .saveScan({casper:user.casper, name:user.name, wid, loc, reason});
+}
+
+load(); show();
+</script>
+</body>
+</html>
